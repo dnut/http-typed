@@ -105,7 +105,7 @@ where
 macro_rules! request_group {
     ($viz:vis $Name:ident { $($Request:ident),*$(,)? }) => {
         $viz struct $Name;
-        $(impl $crate::request::InRequestGroup<$Name> for $Request {})*
+        $(impl $crate::InRequestGroup<$Name> for $Request {})*
     };
 }
 
