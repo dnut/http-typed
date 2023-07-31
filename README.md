@@ -1,6 +1,6 @@
-# HTTP Request Response Client
+# HTTP Typed
 
-Client implementation of a common request-response pattern. Simply pass any type into one of the `send` functions or methods, and it will return a result of your desired type. `send` handles serialization, deserialization, and http messaging.
+Client implementation for http communication using custom request and response types. Pass any type into a `send` functions or method, and it will return a result of your desired type. `send` handles request serialization, http messaging, and response deserialization.
 
 To keep this crate simple, it is is oriented towards a specific but very common pattern. If your use case meets the following conditions, this crate will work for you:
 1. request-response communication
@@ -8,7 +8,7 @@ To keep this crate simple, it is is oriented towards a specific but very common 
 3. communicate over http (uses reqwest under the hood)
 4. http body is serialized as json
 5. status codes outside the 200 range are considered errors
-6. request and response types can be serialized and deserialized using serde into concrete rust types
+6. request and response types must be serializable and deserializable using serde
 7. the path and HTTP method can be determined from the concrete rust type used for the request
 
 ## Usage
