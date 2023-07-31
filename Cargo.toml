@@ -2,6 +2,18 @@
 name = "http-typed"
 version = "0.1.0"
 edition = "2021"
+description = "HTTP client supporting custom request and response types."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/dnut/http-typed"
+readme = "README.md"
+keywords = ["http", "client", "request", "types", "json"]
+categories = [
+    "web-programming",
+    "web-programming::http-client",
+    "network-programming",
+    "asynchronous",
+    "data-structures",
+]
 
 [dependencies]
 paste = "1.0.0"
