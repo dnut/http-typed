@@ -1,5 +1,7 @@
 use std::marker::PhantomData;
 
+use reqwest::header::CONTENT_TYPE;
+
 pub trait Request {
     /// Type to deserialize from the http response body
     type Response;
@@ -79,6 +81,7 @@ where
     let response = reqwest::Client::new()
         .request(method.into(), url)
         .body(serde_json::to_string(&request)?.into_bytes())
+        .header(CONTENT_TYPE, "application/json")
         .send()
         .await?;
     let status = response.status();
