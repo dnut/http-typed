@@ -1,6 +1,6 @@
 # HTTP Typed
 
-Client implementation for http communication using custom request and response types. Pass any type into a `send` functions or method, and it will return a result of your desired type. `send` handles request serialization, http messaging, and response deserialization.
+Http Client implementation supporting custom request and response types. Pass any type into a `send` functions or method, and it will return a result of your desired type. `send` handles request serialization, http messaging, and response deserialization.
 
 To keep this crate simple, it is is oriented towards a specific but very common pattern. If your use case meets the following conditions, this crate will work for you:
 1. request-response communication
