@@ -1,6 +1,6 @@
 # HTTP Typed
 
-HTTP client implementation supporting custom request and response types. Pass any type into a `send` functions or method, and it will return a result of your desired type. `send` handles request serialization, http messaging, and response deserialization.
+HTTP client implementation supporting custom request and response types. Pass any type into a `send` functions or method, and it will return a result of your desired response type. `send` handles request serialization, http messaging, and response deserialization.
 
 To keep this crate simple, it is is oriented towards a specific but very common pattern. If your use case meets the following conditions, this crate will work for you:
 1. request-response communication
@@ -34,7 +34,7 @@ pub trait Request {
 }
 ```
 
-This increases design flexibility and can reduce boilerplate. Normally, you might implement a custom gateway struct for every api you interact with, writing a custom send method for every request. Instead, if the metadata is described through the type system, there is no need for custom client structs.
+This increases design flexibility and can reduce boilerplate. Normally, you might implement a custom gateway struct for every api you interact with, writing a custom send method for every request. Instead, the metadata is described through the type system for ultimate flexibility without needing to implement custom clients. If you're defining an API crate for your application, and dependents of your API crate will have the option to use these trait implementations however they want, rather than being required to choose between using your specific client implementation or rewriting all the same metadata in their own application.
 
 If you do not control the crate with the request and response structs, you can implement any traits for them using the newtype pattern, or with a reusable generic wrapper struct.
 
