@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+
+cargo fmt --all --check
+cargo clippy -- -Dwarnings
+cargo nextest help >/dev/null && cargo nextest run
+cargo nextest help >/dev/null || cargo test

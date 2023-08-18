@@ -80,23 +80,34 @@ where
 {
     let response = reqwest::Client::new()
         .request(method.into(), url)
-        .body(serde_json::to_string(&request)?.into_bytes())
+        .body(
+            serde_json::to_string(&request)
+                .map_err(Error::SerializationError)?
+                .into_bytes(),
+        )
         .header(CONTENT_TYPE, "application/json")
         .send()
         .await?;
     let status = response.status();
     if status.is_success() {
         let body = response.bytes().await?;
-        Ok(serde_json::from_slice(&body)?)
+        serde_json::from_slice(&body).map_err(|error| Error::DeserializationError {
+            error,
+            response_body: body_bytes_to_str(&body),
+        })
     } else {
         let message = match response.bytes().await {
-            Ok(bytes) => match std::str::from_utf8(&bytes) {
-                Ok(message) => message.to_owned(),
-                Err(e) => format!("failed to parse body: {e:?}"),
-            },
+            Ok(bytes) => body_bytes_to_str(&bytes),
             Err(e) => format!("failed to get body: {e:?}"),
         };
         Err(Error::InvalidStatusCode(status.into(), message))
+    }
+}
+
+fn body_bytes_to_str(bytes: &[u8]) -> String {
+    match std::str::from_utf8(bytes) {
+        Ok(message) => message.to_owned(),
+        Err(e) => format!("could not read message body as a string: {e:?}"),
     }
 }
 
@@ -126,7 +137,12 @@ pub enum Error {
     #[error("reqwest error: {0}")]
     ClientError(#[from] reqwest::Error),
     #[error("serde serialization error: {0}")]
-    SerializationError(#[from] serde_json::error::Error),
+    SerializationError(serde_json::error::Error),
+    #[error("serde deserialization error `{error}` while parsing response body: {response_body}")]
+    DeserializationError {
+        error: serde_json::error::Error,
+        response_body: String,
+    },
     #[error("invalid status code {0} with response body: `{1}`")]
     InvalidStatusCode(u16, String),
 }
