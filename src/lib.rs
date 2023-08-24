@@ -18,6 +18,8 @@
 //!
 //! ## Usage
 //!
+//! ### Typical
+//!
 //! To use this library, your request and response types must implement
 //! serde::Serialize and serde::Deserialize, respectively.
 //!
@@ -30,6 +32,8 @@
 //! let response = client.send(MyRequest::new()).await?;
 //! ```
 //!
+//! ### Basic
+//!
 //! If you don't want to implement Request or create a Client, the most manual
 //! and basic way to use this library is by using `send_custom`.
 //!
@@ -41,6 +45,8 @@
 //! )
 //! .await?;
 //! ```
+//!
+//! ### Client
 //!
 //! One downside of the `send_custom` (and `send`) *function* is that it
 //! instantiates a client for every request, which is expensive. To improve
@@ -57,6 +63,8 @@
 //! .await?;
 //! ```
 //!
+//! ### Request
+//!
 //! You may also prefer not to specify metadata about the request every time you
 //! send a request, since these things will likely be the same for every request
 //! of this type. Describe the request metadata in the type system by
@@ -70,8 +78,8 @@
 //! }
 //! ```
 //!
-//! This increases design flexibility and boilerplate. See the [API Client
-//! Design](#api-client-design) section below for an explanation.
+//! This increases design flexibility and reduces boilerplate. See the [API
+//! Client Design](#api-client-design) section below for an explanation.
 //!
 //! If you do not control the crate with the request and response structs, you
 //! can implement any traits for them using the newtype pattern, or with a
@@ -98,6 +106,8 @@
 //! let my_response = client.send(MyRequest::new()).await?;
 //! ```
 //!
+//! ### Request groups
+//!
 //! You can also define request groups. This defines a client type that is
 //! explicit about exactly which requests it can handle. The code will not
 //! compile if you try to send a request with the wrong client.
@@ -110,6 +120,9 @@
 //! let my_response1 = my_client.send(MyRequest1::new()).await?; // works
 //! let other_response = my_client.send(OtherRequest::new()).await?; // does not compile
 //! ```
+//!
+//! ### send_to
+//!
 //! If you want to restrict the request group, but still want to include the url
 //! for every call to `send`, `MyClient` has a `send_to` method that can be used
 //! with the default client to specify the url at the call-site.
