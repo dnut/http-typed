@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{any::type_name, marker::PhantomData};
 
 use reqwest::header::CONTENT_TYPE;
 
@@ -15,60 +15,154 @@ pub trait Request {
 /// optionally specify:
 /// - a base url to be used for all requests
 /// - a request group to constrain the request types accepted by this type
-#[derive(Debug, Clone)]
 pub struct Client<RequestGroup = All> {
     base_url: String,
+    inner: reqwest::Client,
     _p: PhantomData<RequestGroup>,
+}
+
+/// Explicitly implemented to avoid requirement RequestGroup: Debug
+impl<RequestGroup> std::fmt::Debug for Client<RequestGroup> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct(type_name::<Self>())
+            .field("base_url", &self.base_url)
+            .field("inner", &self.inner)
+            .finish()
+    }
+}
+
+/// Explicitly implemented to avoid requirement RequestGroup: Default
+impl<RequestGroup> Default for Client<RequestGroup> {
+    fn default() -> Self {
+        Self {
+            base_url: Default::default(),
+            inner: Default::default(),
+            _p: PhantomData,
+        }
+    }
+}
+
+/// Explicitly implemented to avoid requirement RequestGroup: Clone
+impl<RequestGroup> Clone for Client<RequestGroup> {
+    fn clone(&self) -> Self {
+        Self {
+            base_url: self.base_url.clone(),
+            inner: self.inner.clone(),
+            _p: PhantomData,
+        }
+    }
 }
 
 impl<RequestGroup> Client<RequestGroup> {
     pub fn new(base_url: String) -> Self {
         Self {
             base_url,
+            inner: reqwest::Client::new(),
             _p: PhantomData,
         }
     }
 
-    /// Send the provided request to the host at the specified base url, using
-    /// the request metadata specified by the Request implementation. This
-    /// method upgrades from the `send` function by enabling you to constrain
-    /// the request group with the type system.
-    pub async fn send_to<Req>(base_url: &str, request: Req) -> Result<Req::Response, Error>
-    where
-        Req: Request + serde::Serialize + InRequestGroup<RequestGroup>,
-        Req::Response: for<'a> serde::Deserialize<'a>,
-    {
-        send(base_url, request).await
-    }
-
-    /// Send the provided request to the host at the specified base url, using
-    /// the request metadata specified by the Request implementation. This
-    /// method upgrades from the `send_to` method by allowing you specify the
-    /// base url at the time of instantiation rather than passing it to every
-    /// `send` call.
+    /// Send the provided request to the host at this client's base_url, using
+    /// the Request implementation to determine the remaining url path and
+    /// request data.
+    ///
+    /// The url used for the request is {self.base_url}{request.path()}
     pub async fn send<Req>(&self, request: Req) -> Result<Req::Response, Error>
     where
         Req: Request + serde::Serialize + InRequestGroup<RequestGroup>,
         Req::Response: for<'a> serde::Deserialize<'a>,
     {
-        send(&self.base_url, request).await
+        send_custom_with_client(
+            &self.inner,
+            &format!("{}{}", self.base_url, request.path()),
+            request.method(),
+            request,
+        )
+        .await
+    }
+
+    /// Send the provided request to the host at this client's base_url plus
+    /// url_infix, using the Request implementation to determine the remaining
+    /// url path and request data.
+    ///
+    /// The url used for the request is
+    /// {self.base_url}{url_infix}{request.path()}
+    ///
+    /// If you'd like to specify the entire base url for each request using this
+    /// method, instantiate this struct with base_url = "" (the default)
+    pub async fn send_to<Req>(&self, url_infix: &str, request: Req) -> Result<Req::Response, Error>
+    where
+        Req: Request + serde::Serialize + InRequestGroup<RequestGroup>,
+        Req::Response: for<'a> serde::Deserialize<'a>,
+    {
+        send_custom_with_client(
+            &self.inner,
+            &format!("{}{url_infix}{}", self.base_url, request.path()),
+            request.method(),
+            request,
+        )
+        .await
+    }
+
+    /// Send the provided request to the specified path using the specified method,
+    /// and deserialize the response into the specified response type.
+    ///
+    /// The url used for this request is {self.base_url}{path}
+    ///
+    /// If you'd like to specify the entire base url for each request using this
+    /// method, instantiate this struct with base_url = "" (the default)
+    pub async fn send_custom<Req, Res>(
+        &self,
+        path: &str,
+        method: HttpMethod,
+        request: Req,
+    ) -> Result<Res, Error>
+    where
+        Req: serde::Serialize,
+        Res: for<'a> serde::Deserialize<'a>,
+    {
+        send_custom_with_client(
+            &self.inner,
+            &format!("{}{path}", self.base_url),
+            method,
+            request,
+        )
+        .await
     }
 }
 
+/// Convenience function to create a client and send a request using minimal
+/// boilerplate. Creating a client is expensive, so you should not use this
+/// function if you plan on sending multiple requests.
+///
+/// Equivalent to:
+/// - `Client::new(base_url).send(request)`
+/// - `Client::default().send_to(base_url, request)`
+///
 /// Send the provided request to the host at the specified base url, using the
-/// request metadata specified by the Request implementation.
+/// request metadata specified by the Request implementation to create the http
+/// request and determine the response type.
+///
+/// The url used for the request is {base_url}{request.path()}
 pub async fn send<Req>(base_url: &str, request: Req) -> Result<Req::Response, Error>
 where
     Req: Request + serde::Serialize,
     Req::Response: for<'a> serde::Deserialize<'a>,
 {
-    let url = join_url(base_url, request.path());
-    send_custom(&url, request.method(), request).await
+    let url = format!("{base_url}{}", request.path());
+    send_custom_with_client(&reqwest::Client::new(), &url, request.method(), request).await
 }
 
-/// Send the provided request to the host at the specified base url using the
-/// specified method, and deserialize the response as the specified response
-/// type
+/// Convenience function to create a client and send a request using minimal
+/// boilerplate. Creating a client is expensive, so you should not use this
+/// function if you plan on sending multiple requests.
+///
+/// Equivalent to:
+/// - `Client::default().send_custom(url, method, request)`
+/// - `Client::new(url).send_custom("", method, request)`
+/// 
+/// Send the provided request to the specified url using the specified method,
+/// and deserialize the response into the specified response type.
 pub async fn send_custom<Req, Res>(
     url: &str,
     method: HttpMethod,
@@ -78,7 +172,20 @@ where
     Req: serde::Serialize,
     Res: for<'a> serde::Deserialize<'a>,
 {
-    let response = reqwest::Client::new()
+    send_custom_with_client(&reqwest::Client::new(), url, method, request).await
+}
+
+async fn send_custom_with_client<Req, Res>(
+    client: &reqwest::Client,
+    url: &str,
+    method: HttpMethod,
+    request: Req,
+) -> Result<Res, Error>
+where
+    Req: serde::Serialize,
+    Res: for<'a> serde::Deserialize<'a>,
+{
+    let response = client
         .request(method.into(), url)
         .body(
             serde_json::to_string(&request)
@@ -173,15 +280,5 @@ impl From<HttpMethod> for reqwest::Method {
             HttpMethod::Connect => reqwest::Method::CONNECT,
             HttpMethod::Patch => reqwest::Method::PATCH,
         }
-    }
-}
-
-fn join_url(base_url: &str, path: String) -> String {
-    if base_url.chars().last().map(|c| c == '/').unwrap_or(true)
-        || path.chars().next().map(|c| c == '/').unwrap_or(true)
-    {
-        format!("{base_url}{}", path)
-    } else {
-        format!("{base_url}/{}", path)
     }
 }

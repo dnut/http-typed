@@ -1,6 +1,6 @@
 [package]
 name = "http-typed"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "HTTP client supporting custom request and response types."
 license = "MIT OR Apache-2.0"
