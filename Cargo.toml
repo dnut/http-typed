@@ -1,6 +1,6 @@
 [package]
 name = "http-typed"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2021"
 description = "HTTP client supporting custom request and response types."
 license = "MIT OR Apache-2.0"
@@ -18,7 +18,7 @@ categories = [
 [features]
 default = ["client", "native-tls"]
 client = ["reqwest"]
-rustls = ["reqwest/rustls-tls"]
+rustls-tls = ["reqwest/rustls-tls"]
 native-tls = ["reqwest/native-tls"]
 
 [dependencies]
