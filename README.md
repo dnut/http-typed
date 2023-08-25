@@ -112,6 +112,61 @@ let my_client = Client::new("http://example.com");
 let my_response = my_client.send_to("/api/v2", MyRequest::new()).await?;
 ```
 
+## Cargo Features
+
+Typically, the default features should be fine:
+
+```toml
+http-typed = "0.3"
+```
+
+The default features include the full Client implementation, and depend on system tls libraries.
+
+All features:
+
+- **default** = ["client", "native-tls"]
+- **client**: Includes the Client implementation described above and depends on reqwest.
+- **native-tls**: Depend on dynamically linked system tls libraries.
+- **rustls-tls**: Statically link all tls dependencies with webpki, no tls is required in the system.
+
+
+### No system tls? Use rustls
+
+To statically link the tls dependencies, use this:
+
+```toml
+http-typed = { version = "0.3", default-features = false, features = ["client", "rustls-tls"] }
+```
+
+### No Client
+
+If you'd like to exclude the `Client` implementation and all of its dependencies on reqwest and tls libraries, use this:
+
+```toml
+http-typed = { version = "0.3", default-features = false }
+```
+
+This allows you, as a server developer, to exclude unnecessary dependencies from your server. For example, you may have an API crate with all the request and response structs, which you both import in the server and also make available to clients. You can feature gate the client in your API library:
+
+```toml
+# api library's Cargo.toml
+
+[features]
+default = ["client"]
+client = ["http-typed/client"]
+```
+
+...and then you can disable it in the server's Cargo.toml. Something like this:
+
+```toml
+# server binary's Cargo.toml
+
+[dependencies]
+my-api-client = { path = "../client", default-features = false }
+```
+
+A similar pattern can be used to give clients the option between native-tls and rustls-tls.
+
 ## API Client Design
 Normally, a you might implement a custom client struct to connect to an API, including a custom method for every request. In doing so, you've forced all dependents of the API to make a choice between two options:
 1. use the specific custom client struct that was already implemented, accepting any issues with it.
@@ -120,7 +175,6 @@ Normally, a you might implement a custom client struct to connect to an API, inc
 Instead, you can describe the metadata through trait definitions for ultimate flexibility, without locking dependents into a client implementation or needing to implement any custom clients structs. Dependents of the API now have better options:
 1. use the Client struct provided by http-typed, accepting any issues with it. This is easier for you to support because you don't need to worry about implementation details of sending requests in general. You can just export or alias the `Client` struct.
 2. implement a custom client that can generically handle types implementing Request by using the data returned by their methods. This is easier for dependents because they don't need to write any request-specific code. The Request trait exposes that information without locking them into a client implementation. Only a single generic request handler is sufficient.
-
 
 ## Other use cases
 If your use case does not meet some of the conditions 2-7 described in the introduction, you'll find my other crate useful, which individually generalizes each of those, allowing any of them to be individually customized with minimal boilerplate. It is currently a work in progress, but almost complete. This crate and that crate will be source-code-compatible, meaning the other crate can be used as a drop-in replacement of this one without changing any code, just with more customization available.

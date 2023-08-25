@@ -1,6 +1,6 @@
 [package]
 name = "http-typed"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 description = "HTTP client supporting custom request and response types."
 license = "MIT OR Apache-2.0"
@@ -15,9 +15,15 @@ categories = [
     "data-structures",
 ]
 
+[features]
+default = ["client", "native-tls"]
+client = ["reqwest"]
+rustls = ["reqwest/rustls-tls"]
+native-tls = ["reqwest/native-tls"]
+
 [dependencies]
 paste = "1.0.0"
-reqwest = ">=0.10.0,<0.12.0"
+reqwest = { version = ">=0.10.0,<0.12.0", optional = true, default-features = false }
 serde = "1.0.69"
 serde_json = "1.0.0"
 thiserror = "1.0.0"
