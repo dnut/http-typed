@@ -242,16 +242,53 @@
 #[cfg(feature = "client")]
 mod client;
 
+use std::convert::Infallible;
+
 #[cfg(feature = "client")]
 pub use client::*;
 
-pub trait Request {
+pub trait Request: Sized {
+    // TODO: use when stable: https://github.com/rust-lang/rust/issues/29661
+    /// Specify a pre-defined approach to serialize a request body. For example:
+    /// - SerdeJson
+    /// - NoBody
+    type Serializer: SerializeBody<Self>;
+
     /// Type to deserialize from the http response body
     type Response;
+
     /// HTTP method that the request will be sent with
     fn method(&self) -> HttpMethod;
+
     /// String to appended to the end of url when sending this request.
     fn path(&self) -> String;
+}
+
+pub struct SerdeJson;
+pub struct NoBody;
+
+pub trait SerializeBody<T> {
+    type Error;
+    fn serialize_body(request: &T) -> Result<Vec<u8>, Self::Error>;
+}
+
+impl<T> SerializeBody<T> for SerdeJson
+where
+    T: serde::Serialize,
+{
+    type Error = serde_json::error::Error;
+
+    fn serialize_body(request: &T) -> Result<Vec<u8>, Self::Error> {
+        Ok(serde_json::to_string(&request)?.into_bytes())
+    }
+}
+
+impl<T> SerializeBody<T> for NoBody {
+    type Error = Infallible;
+
+    fn serialize_body(_: &T) -> Result<Vec<u8>, Self::Error> {
+        Ok(vec![])
+    }
 }
 
 /// Define a request group to constrain which requests can be used with a client.

@@ -2,7 +2,7 @@ use std::{any::type_name, marker::PhantomData};
 
 use reqwest::header::CONTENT_TYPE;
 
-use crate::{All, HttpMethod, InRequestGroup, Request};
+use crate::{All, HttpMethod, InRequestGroup, Request, SerializeBody};
 
 /// A client to delegate to the send function that provides the ability to
 /// optionally specify:
@@ -60,9 +60,12 @@ impl<RequestGroup> Client<RequestGroup> {
     /// request data.
     ///
     /// The url used for the request is {self.base_url}{request.path()}
-    pub async fn send<Req>(&self, request: Req) -> Result<Req::Response, Error>
+    pub async fn send<Req>(
+        &self,
+        request: Req,
+    ) -> Result<Req::Response, Error<<Req::Serializer as SerializeBody<Req>>::Error>>
     where
-        Req: Request + serde::Serialize + InRequestGroup<RequestGroup>,
+        Req: Request + InRequestGroup<RequestGroup>,
         Req::Response: for<'a> serde::Deserialize<'a>,
     {
         send_custom_with_client(
@@ -83,9 +86,13 @@ impl<RequestGroup> Client<RequestGroup> {
     ///
     /// If you'd like to specify the entire base url for each request using this
     /// method, instantiate this struct with base_url = "" (the default)
-    pub async fn send_to<Req>(&self, url_infix: &str, request: Req) -> Result<Req::Response, Error>
+    pub async fn send_to<Req>(
+        &self,
+        url_infix: &str,
+        request: Req,
+    ) -> Result<Req::Response, Error<<Req::Serializer as SerializeBody<Req>>::Error>>
     where
-        Req: Request + serde::Serialize + InRequestGroup<RequestGroup>,
+        Req: Request + InRequestGroup<RequestGroup>,
         Req::Response: for<'a> serde::Deserialize<'a>,
     {
         send_custom_with_client(
@@ -109,9 +116,9 @@ impl<RequestGroup> Client<RequestGroup> {
         path: &str,
         method: HttpMethod,
         request: Req,
-    ) -> Result<Res, Error>
+    ) -> Result<Res, Error<Req::Error>>
     where
-        Req: serde::Serialize,
+        Req: SimpleBody,
         Res: for<'a> serde::Deserialize<'a>,
     {
         send_custom_with_client(
@@ -137,9 +144,12 @@ impl<RequestGroup> Client<RequestGroup> {
 /// request and determine the response type.
 ///
 /// The url used for the request is {base_url}{request.path()}
-pub async fn send<Req>(base_url: &str, request: Req) -> Result<Req::Response, Error>
+pub async fn send<Req>(
+    base_url: &str,
+    request: Req,
+) -> Result<Req::Response, Error<<Req::Serializer as SerializeBody<Req>>::Error>>
 where
-    Req: Request + serde::Serialize,
+    Req: Request,
     Req::Response: for<'a> serde::Deserialize<'a>,
 {
     let url = format!("{base_url}{}", request.path());
@@ -160,9 +170,9 @@ pub async fn send_custom<Req, Res>(
     url: &str,
     method: HttpMethod,
     request: Req,
-) -> Result<Res, Error>
+) -> Result<Res, Error<Req::Error>>
 where
-    Req: serde::Serialize,
+    Req: SimpleBody,
     Res: for<'a> serde::Deserialize<'a>,
 {
     send_custom_with_client(&reqwest::Client::new(), url, method, request).await
@@ -173,18 +183,14 @@ async fn send_custom_with_client<Req, Res>(
     url: &str,
     method: HttpMethod,
     request: Req,
-) -> Result<Res, Error>
+) -> Result<Res, Error<Req::Error>>
 where
-    Req: serde::Serialize,
+    Req: SimpleBody,
     Res: for<'a> serde::Deserialize<'a>,
 {
     let response = client
         .request(method.into(), url)
-        .body(
-            serde_json::to_string(&request)
-                .map_err(Error::SerializationError)?
-                .into_bytes(),
-        )
+        .body(request.simple_body().map_err(Error::SerializationError)?)
         .header(CONTENT_TYPE, "application/json")
         .send()
         .await?;
@@ -204,6 +210,23 @@ where
     }
 }
 
+/// This allows the send_custom methods to accept objects that do not implement
+/// Request. SimpleBody is a more minimal requirement that you get automatically
+/// if you implement request, but you can also implement this by itself without
+/// implementing Request, to keep things simple with usages of send_custom.
+pub trait SimpleBody {
+    type Error;
+    fn simple_body(&self) -> Result<Vec<u8>, Self::Error>;
+}
+
+impl<T: Request> SimpleBody for T {
+    type Error = <<Self as Request>::Serializer as SerializeBody<Self>>::Error;
+
+    fn simple_body(&self) -> Result<Vec<u8>, Self::Error> {
+        <Self as Request>::Serializer::serialize_body(self)
+    }
+}
+
 fn body_bytes_to_str(bytes: &[u8]) -> String {
     match std::str::from_utf8(bytes) {
         Ok(message) => message.to_owned(),
@@ -212,11 +235,11 @@ fn body_bytes_to_str(bytes: &[u8]) -> String {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum Error {
+pub enum Error<Ser = serde_json::error::Error> {
     #[error("reqwest error: {0}")]
     ClientError(#[from] reqwest::Error),
-    #[error("serde serialization error: {0}")]
-    SerializationError(serde_json::error::Error),
+    #[error("request body serialization error: {0}")]
+    SerializationError(Ser),
     #[error("serde deserialization error `{error}` while parsing response body: {response_body}")]
     DeserializationError {
         error: serde_json::error::Error,
